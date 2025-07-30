@@ -105,8 +105,24 @@ class InteractiveMultiModel {
         url: 'https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf'
       },
       {
+        model: this.multiModel.getModelConfig('smollm:135m')!,
+        url: 'https://huggingface.co/HuggingFaceTB/SmolLM-135M-Instruct-GGUF/resolve/main/smollm-135m-instruct-q8_0-gguf.gguf'
+      },
+      {
+        model: this.multiModel.getModelConfig('smollm:360m')!,
+        url: 'https://huggingface.co/HuggingFaceTB/SmolLM-360M-Instruct-GGUF/resolve/main/smollm-360m-instruct-q4_k_m.gguf'
+      },
+      {
         model: this.multiModel.getModelConfig('tinyllama')!,
         url: 'https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf'
+      },
+      {
+        model: this.multiModel.getModelConfig('stablelm:1.6b')!,
+        url: 'https://huggingface.co/TheBloke/stablelm-zephyr-1.6b-GGUF/resolve/main/stablelm-zephyr-1.6b.Q4_K_M.gguf'
+      },
+      {
+        model: this.multiModel.getModelConfig('openhermes:0.77b')!,
+        url: 'https://huggingface.co/bartowski/OpenHermes-0.77B-GGUF/resolve/main/OpenHermes-0.77B-Q4_K_M.gguf'
       },
       {
         model: this.multiModel.getModelConfig('llama3.2:1b')!,
@@ -192,11 +208,6 @@ class InteractiveMultiModel {
       
       // Use sequential numbering for display
       this.displayModelStatus(info, index + 1, modelsDir);
-      
-      // Add spacing between models except for the last one
-      if (index < sortedInfo.length - 1) {
-        console.log();
-      }
     });
 
     console.log('\n0. Back to main menu');
@@ -245,7 +256,11 @@ class InteractiveMultiModel {
   async configureModels() {
     const models = [
       'qwen2.5:0.5b',
+      'smollm:135m',
+      'smollm:360m',
       'tinyllama',
+      'stablelm:1.6b',
+      'openhermes:0.77b',
       'phi3:mini',
       'llama3.2:1b',
       'llama3.2:3b',
@@ -465,9 +480,7 @@ class InteractiveMultiModel {
     const filePath = path.join(modelsDir, info.model.filename);
     const exists = fs.existsSync(filePath);
     const status = exists ? '✅' : '  ';
-    console.log(`${status} ${index}. ${info.model.displayName} (${info.model.size})`);
-    console.log(`      📅 ${info.model.releaseDate} | 🏗️ ${info.model.architecture}`);
-    console.log(`      ✨ ${info.model.bestFor}`);
+    console.log(`${status} ${index}. ${info.model.displayName} (${info.model.size}) - ${info.model.bestFor}`);
   }
 
   private async downloadModel(url: string, filePath: string, modelName: string): Promise<void> {

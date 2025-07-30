@@ -20,6 +20,26 @@ interface ModelInfo {
 const MODELS: ModelInfo[] = [
   // Tiny models (< 500MB)
   {
+    name: 'smollm:135m',
+    displayName: 'SmolLM 135M',
+    filename: 'SmolLM-135M-Instruct-Q8_0.gguf',
+    size: '150MB',
+    url: 'https://huggingface.co/HuggingFaceTB/SmolLM-135M-Instruct-GGUF/resolve/main/smollm-135m-instruct-q8_0-gguf.gguf',
+    description: 'Ultra-lightweight model for edge devices.',
+    architecture: 'SmolLM (HuggingFace)',
+    releaseDate: '2024'
+  },
+  {
+    name: 'smollm:360m',
+    displayName: 'SmolLM 360M',
+    filename: 'SmolLM-360M-Instruct-Q4_K_M.gguf',
+    size: '250MB',
+    url: 'https://huggingface.co/HuggingFaceTB/SmolLM-360M-Instruct-GGUF/resolve/main/smollm-360m-instruct-q4_k_m.gguf',
+    description: 'Lightweight model with improved reasoning.',
+    architecture: 'SmolLM (HuggingFace)',
+    releaseDate: '2024'
+  },
+  {
     name: 'qwen2.5:0.5b',
     displayName: 'Qwen2.5 0.5B',
     filename: 'Qwen2.5-0.5B-Instruct-Q4_K_M.gguf',
@@ -30,7 +50,17 @@ const MODELS: ModelInfo[] = [
     releaseDate: '2024'
   },
   
-  // Small models (500MB - 1GB)  
+  // Small models (500MB - 1GB)
+  {
+    name: 'openhermes:0.77b',
+    displayName: 'OpenHermes 0.77B',
+    filename: 'openhermes-0.77b-v3.5-Q4_K_M.gguf',
+    size: '500MB',
+    url: 'https://huggingface.co/bartowski/OpenHermes-0.77B-GGUF/resolve/main/OpenHermes-0.77B-Q4_K_M.gguf',
+    description: 'Function calling and structured output specialist.',
+    architecture: 'Hermes (Nous Research)',
+    releaseDate: '2024'
+  },
   {
     name: 'tinyllama',
     displayName: 'TinyLlama 1.1B',
@@ -38,6 +68,16 @@ const MODELS: ModelInfo[] = [
     size: '669MB',
     url: 'https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf',
     description: 'Efficient small model with good quality for its size.'
+  },
+  {
+    name: 'stablelm:1.6b',
+    displayName: 'StableLM Zephyr 1.6B',
+    filename: 'stablelm-zephyr-1_6b-Q4_K_M.gguf',
+    size: '950MB',
+    url: 'https://huggingface.co/TheBloke/stablelm-zephyr-1.6b-GGUF/resolve/main/stablelm-zephyr-1.6b.Q4_K_M.gguf',
+    description: 'Instruction following and coding specialist.',
+    architecture: 'StableLM (Stability AI)',
+    releaseDate: '2024'
   },
   {
     name: 'phi3:mini',
@@ -147,9 +187,6 @@ class ModelDownloader {
     const exists = fs.existsSync(path.join(this.modelsDir, model.filename));
     const status = exists ? '✅' : '  ';
     console.log(`${status} ${index}. ${model.displayName} (${model.size}) - ${model.description}`);
-    if (model.architecture && model.releaseDate) {
-      console.log(`      📅 ${model.releaseDate} | 🏗️ ${model.architecture}`);
-    }
   }
 
   async handleModelSelection(model: ModelInfo) {
@@ -342,34 +379,36 @@ class ModelDownloader {
   async showMenu() {
     console.log('\n📋 Available Models:\n');
     
-    // Group by size
+    // Show models with proper numbering
     console.log('🔸 Tiny Models (< 500MB):');
-    MODELS.filter(m => m.size.includes('MB') && parseInt(m.size) < 500).forEach((model, i) => {
-      this.displayModel(model, i + 1);
+    MODELS.forEach((model, index) => {
+      if (model.size.includes('MB') && parseInt(model.size) < 500) {
+        this.displayModel(model, index + 1);
+      }
     });
     
     console.log('\n🔹 Small Models (500MB - 1GB):');
-    MODELS.filter(m => {
-      const size = parseInt(m.size);
-      return m.size.includes('MB') && size >= 500 && size < 1000;
-    }).forEach((model, i) => {
-      this.displayModel(model, i + 1);
+    MODELS.forEach((model, index) => {
+      const size = parseInt(model.size);
+      if (model.size.includes('MB') && size >= 500) {
+        this.displayModel(model, index + 1);
+      }
     });
     
     console.log('\n🔷 Medium Models (1GB - 3GB):');
-    MODELS.filter(m => {
-      const size = parseFloat(m.size);
-      return m.size.includes('GB') && size >= 1 && size < 3;
-    }).forEach((model, i) => {
-      this.displayModel(model, i + 1);
+    MODELS.forEach((model, index) => {
+      const size = parseFloat(model.size);
+      if (model.size.includes('GB') && size >= 1 && size < 3) {
+        this.displayModel(model, index + 1);
+      }
     });
     
     console.log('\n🔶 Large Models (3GB+):');
-    MODELS.filter(m => {
-      const size = parseFloat(m.size);
-      return m.size.includes('GB') && size >= 3;
-    }).forEach((model, i) => {
-      this.displayModel(model, i + 1);
+    MODELS.forEach((model, index) => {
+      const size = parseFloat(model.size);
+      if (model.size.includes('GB') && size >= 3) {
+        this.displayModel(model, index + 1);
+      }
     });
     
     console.log('\n0. Exit');

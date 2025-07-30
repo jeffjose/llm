@@ -37,6 +37,28 @@ class MultiModelInference {
       capabilities: 'Multilingual, basic reasoning',
       bestFor: 'Quick responses, testing, simple queries'
     },
+    { 
+      name: 'smollm:135m', 
+      displayName: 'SmolLM 135M', 
+      enabled: false,
+      filename: 'SmolLM-135M-Instruct-Q8_0.gguf',
+      size: '0.15GB',
+      architecture: 'SmolLM (HuggingFace)',
+      releaseDate: '2024',
+      capabilities: 'Ultra-lightweight, basic chat',
+      bestFor: 'Edge devices, simple tasks'
+    },
+    { 
+      name: 'smollm:360m', 
+      displayName: 'SmolLM 360M', 
+      enabled: false,
+      filename: 'SmolLM-360M-Instruct-Q4_K_M.gguf',
+      size: '0.25GB',
+      architecture: 'SmolLM (HuggingFace)',
+      releaseDate: '2024',
+      capabilities: 'Lightweight, improved reasoning',
+      bestFor: 'Mobile apps, quick responses'
+    },
     
     // Small models (500MB - 1GB)
     { 
@@ -49,6 +71,28 @@ class MultiModelInference {
       releaseDate: '2024',
       capabilities: 'Chat-optimized, efficient',
       bestFor: 'Conversational AI, low-resource environments'
+    },
+    { 
+      name: 'stablelm:1.6b', 
+      displayName: 'StableLM Zephyr 1.6B', 
+      enabled: false,
+      filename: 'stablelm-zephyr-1_6b-Q4_K_M.gguf',
+      size: '0.95GB',
+      architecture: 'StableLM (Stability AI)',
+      releaseDate: '2024',
+      capabilities: 'Instruction following, coding',
+      bestFor: 'Code completion, technical tasks'
+    },
+    { 
+      name: 'openhermes:0.77b', 
+      displayName: 'OpenHermes 0.77B', 
+      enabled: false,
+      filename: 'openhermes-0.77b-v3.5-Q4_K_M.gguf',
+      size: '0.5GB',
+      architecture: 'Hermes (Nous Research)',
+      releaseDate: '2024',
+      capabilities: 'Function calling, structured output',
+      bestFor: 'API integration, tool use'
     },
     { 
       name: 'phi3:mini', 
