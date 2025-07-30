@@ -289,9 +289,8 @@ class InteractiveMultiModel {
     
     const results = await this.multiModel.inferParallel(prompt);
     
-    // Use compact format if all responses are short (less than 100 chars)
-    const allShort = results.every(r => r.response.trim().length < 100);
-    this.multiModel.displayComparison(results, allShort);
+    // Always use compact format with inline timings for parallel inference
+    this.multiModel.displayComparison(results, true);
     
     // Reset to default enabled state
     this.multiModel.models.forEach(model => {
@@ -690,6 +689,40 @@ class InteractiveMultiModel {
   }
 }
 
-// Run the interactive tool
-const tool = new InteractiveMultiModel();
-tool.start().catch(console.error);
+// Check for command line arguments
+async function main() {
+  const tool = new InteractiveMultiModel();
+  
+  // Check if a model path was provided as argument
+  const modelPath = process.argv[2];
+  if (modelPath) {
+    // If it's a model file path, download it directly
+    if (modelPath.endsWith('.gguf')) {
+      const modelName = path.basename(modelPath);
+      const modelsDir = path.join(process.cwd(), 'models');
+      
+      // Ensure models directory exists
+      if (!fs.existsSync(modelsDir)) {
+        fs.mkdirSync(modelsDir, { recursive: true });
+      }
+      
+      const targetPath = path.join(modelsDir, modelName);
+      
+      // Check if model already exists
+      if (fs.existsSync(targetPath)) {
+        console.log(`✅ Model ${modelName} already exists`);
+        process.exit(0);
+      }
+      
+      console.log(`📥 Downloading ${modelName}...`);
+      console.log('This feature requires the model to be available via HTTP URL.');
+      console.log('Please use the interactive menu to download models from the curated list.');
+      process.exit(1);
+    }
+  }
+  
+  // Start interactive mode
+  await tool.start();
+}
+
+main().catch(console.error);

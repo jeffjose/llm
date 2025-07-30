@@ -379,10 +379,22 @@ class MultiModelInference {
           ? `[${result.duration.toString().padStart(5)}ms]`
           : '[  ERROR]';
         
-        // Format response - take first line only for compact view
-        const response = result.response.trim().split('\n')[0];
+        // Format response - handle multi-line responses
+        const responseLines = result.response.trim().split('\n');
+        const firstLine = responseLines[0];
         
-        console.log(`${timing} [${paddedName}]: ${response}`);
+        console.log(`${timing} [${paddedName}]: ${firstLine}`);
+        
+        // Print additional lines with proper indentation
+        if (responseLines.length > 1) {
+          const indent = ' '.repeat(timing.length + 3 + paddedName.length + 3);
+          responseLines.slice(1).forEach(line => {
+            if (line.trim()) {  // Skip empty lines
+              console.log(`${indent}${line}`);
+            }
+          });
+        }
+        console.log();  // Empty line between responses
       });
     } else {
       // Verbose format for longer responses

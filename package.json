@@ -4,7 +4,7 @@
   "description": "Local LLM inference with llama.cpp - run language models directly without a server",
   "main": "index.js",
   "bin": {
-    "llm": "./bin/llm.ts"
+    "llm": "./bin/llm-wrapper.js"
   },
   "scripts": {
     "start": "tsx src/interactive-multi-model.ts",
