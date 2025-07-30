@@ -29,7 +29,7 @@ class MultiModelInference {
     { 
       name: 'qwen2.5:0.5b', 
       displayName: 'Qwen2.5 0.5B', 
-      enabled: true,
+      enabled: false,
       filename: 'Qwen2.5-0.5B-Instruct-Q4_K_M.gguf',
       size: '0.4GB',
       architecture: 'Qwen2.5 (Transformer)',
@@ -210,6 +210,13 @@ class MultiModelInference {
     const model = this.models.find(m => m.name === modelName);
     if (model) {
       model.enabled = enabled;
+      // Clear the model from cache if disabling
+      if (!enabled && this.loadedModels.has(modelName)) {
+        const { context, model: llamaModel } = this.loadedModels.get(modelName)!;
+        context.dispose();
+        llamaModel.dispose();
+        this.loadedModels.delete(modelName);
+      }
     }
   }
 
@@ -250,7 +257,8 @@ class MultiModelInference {
     });
 
     const context = await model.createContext({
-      contextSize: 1024 // Smaller context for multi-model usage
+      contextSize: 2048, // Increased context size
+      sequences: 1 // Explicitly set sequences
     });
 
     this.loadedModels.set(modelConfig.name, { model, context });
@@ -269,12 +277,15 @@ class MultiModelInference {
     }
 
     const startTime = Date.now();
-    const { context } = await this.loadModel(modelConfig);
     
-    const sequence = context.getSequence();
-    const session = new LlamaChatSession({
-      contextSequence: sequence
-    });
+    try {
+      const { context } = await this.loadModel(modelConfig);
+      
+      // Get a sequence from the context
+      const sequence = context.getSequence();
+      const session = new LlamaChatSession({
+        contextSequence: sequence
+      });
 
     if (stream) {
       let response = '';
@@ -301,6 +312,10 @@ class MultiModelInference {
       response,
       duration: Date.now() - startTime
     };
+    } catch (error: any) {
+      console.error(`Error in inferSingle for ${modelName}:`, error.message);
+      throw error;
+    }
   }
 
   // Run inference on multiple models in parallel
@@ -309,14 +324,70 @@ class MultiModelInference {
     
     console.log(`🚀 Running inference on ${enabledModels.length} models in parallel...\n`);
 
-    const promises = enabledModels.map(model => 
-      this.inferSingle(model.name, prompt)
-        .catch(err => ({
+    // Pre-load all models to avoid race conditions
+    const loadPromises = enabledModels.map(async model => {
+      try {
+        await this.loadModel(model);
+        return true;
+      } catch (err) {
+        console.error(`Failed to load ${model.name}: ${err}`);
+        return false;
+      }
+    });
+    
+    await Promise.all(loadPromises);
+
+    // Run inference with better error handling
+    const promises = enabledModels.map(async model => {
+      try {
+        // Create a separate context for each parallel inference
+        const modelPath = path.join(process.cwd(), 'models', model.filename);
+        if (!existsSync(modelPath)) {
+          throw new Error(`Model file not found: ${modelPath}`);
+        }
+
+        // Use cached model if available
+        if (this.loadedModels.has(model.name)) {
+          return await this.inferSingle(model.name, prompt);
+        }
+
+        // Otherwise load a fresh instance
+        const llamaModel = await this.llama!.loadModel({
+          modelPath,
+          gpuLayers: 0
+        });
+
+        const context = await llamaModel.createContext({
+          contextSize: 2048,
+          sequences: 1
+        });
+
+        const sequence = context.getSequence();
+        const session = new LlamaChatSession({
+          contextSequence: sequence
+        });
+
+        const startTime = Date.now();
+        const response = await session.prompt(prompt);
+        
+        // Clean up immediately
+        sequence.clearHistory();
+        await context.dispose();
+        await llamaModel.dispose();
+
+        return {
+          model: model.name,
+          response,
+          duration: Date.now() - startTime
+        };
+      } catch (err: any) {
+        return {
           model: model.name,
           response: `Error: ${err.message}`,
           duration: 0
-        }))
-    );
+        };
+      }
+    });
 
     return Promise.all(promises);
   }
@@ -425,8 +496,19 @@ class MultiModelInference {
   // Clean up loaded models
   async dispose() {
     for (const [name, { context, model }] of this.loadedModels) {
-      await context.dispose();
-      await model.dispose();
+      try {
+        // Clear history before disposal
+        try {
+          const sequence = context.getSequence();
+          sequence.clearHistory();
+        } catch (e) {
+          // Sequence might already be disposed
+        }
+        await context.dispose();
+        await model.dispose();
+      } catch (error) {
+        console.error(`Error disposing model ${name}:`, error);
+      }
     }
     this.loadedModels.clear();
   }

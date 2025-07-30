@@ -274,18 +274,45 @@ class InteractiveMultiModel {
       return;
     }
     
-    console.log('\n📦 Available models for parallel inference:');
+    console.log('\n📦 Available models:');
     available.forEach((model, index) => {
       console.log(`${index + 1}. ${model}`);
     });
     
-    // Enable all available models for parallel inference
-    available.forEach(modelName => {
-      this.multiModel.setModelEnabled(modelName, true);
+    console.log('\n⚠️  Note: Running too many models in parallel can cause memory issues.');
+    console.log('Recommended: Select 2-3 models for parallel inference.\n');
+    
+    const selection = await this.question('Select models (comma-separated numbers, or "all" for all): ');
+    
+    // Disable all models first
+    this.multiModel.models.forEach(model => {
+      model.enabled = false;
     });
     
+    if (selection.toLowerCase() === 'all') {
+      // Limit to first 3 models to avoid resource exhaustion
+      const modelsToEnable = available.slice(0, 3);
+      console.log(`\n⚠️  Limiting to first 3 models: ${modelsToEnable.join(', ')}`);
+      modelsToEnable.forEach(modelName => {
+        this.multiModel.setModelEnabled(modelName, true);
+      });
+    } else {
+      // Parse comma-separated numbers
+      const indices = selection.split(',').map(s => parseInt(s.trim()) - 1);
+      const validIndices = indices.filter(i => i >= 0 && i < available.length);
+      
+      if (validIndices.length === 0) {
+        console.log('❌ No valid selections made.');
+        return;
+      }
+      
+      validIndices.forEach(index => {
+        this.multiModel.setModelEnabled(available[index], true);
+      });
+    }
+    
     const prompt = await this.question('\nEnter prompt: ');
-    console.log('\n🚀 Running parallel inference on all available models...\n');
+    console.log('\n🚀 Running parallel inference...\n');
     
     const results = await this.multiModel.inferParallel(prompt);
     
@@ -294,7 +321,7 @@ class InteractiveMultiModel {
     
     // Reset to default enabled state
     this.multiModel.models.forEach(model => {
-      model.enabled = model.name === 'qwen2.5:0.5b';
+      model.enabled = false;
     });
   }
 
@@ -311,10 +338,30 @@ class InteractiveMultiModel {
       console.log(`${index + 1}. ${model}`);
     });
     
-    // Enable all available models for sequential inference
-    available.forEach(modelName => {
-      this.multiModel.setModelEnabled(modelName, true);
+    // Disable all models first
+    this.multiModel.models.forEach(model => {
+      model.enabled = false;
     });
+    
+    const selection = await this.question('\nSelect models (comma-separated numbers, or "all" for all): ');
+    
+    if (selection.toLowerCase() === 'all') {
+      available.forEach(modelName => {
+        this.multiModel.setModelEnabled(modelName, true);
+      });
+    } else {
+      const indices = selection.split(',').map(s => parseInt(s.trim()) - 1);
+      const validIndices = indices.filter(i => i >= 0 && i < available.length);
+      
+      if (validIndices.length === 0) {
+        console.log('❌ No valid selections made.');
+        return;
+      }
+      
+      validIndices.forEach(index => {
+        this.multiModel.setModelEnabled(available[index], true);
+      });
+    }
     
     const prompt = await this.question('\nEnter prompt: ');
     console.log('\n🚀 Running sequential inference on all available models...\n');
