@@ -21,11 +21,11 @@
   },
   "type": "commonjs",
   "dependencies": {
-    "tsx": "^4.20.3"
+    "tsx": "^4.20.3",
+    "node-llama-cpp": "^3.10.0"
   },
   "devDependencies": {
     "@types/node": "^24.1.0",
-    "node-llama-cpp": "^3.10.0",
     "typescript": "^5.8.3"
   }
 }

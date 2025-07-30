@@ -353,36 +353,36 @@ class MultiModelInference {
     console.log('═'.repeat(80));
     
     if (compact) {
-      // Compact format for short responses
+      // Compact format for short responses with inline timings
       const maxModelLength = Math.max(...results.map(r => {
         const model = this.models.find(m => m.name === r.model);
         return (model?.displayName || r.model).length;
       }));
       
       console.log();
-      results.forEach(result => {
+      
+      // Sort by duration (fastest first)
+      const sortedResults = [...results].sort((a, b) => {
+        // Put errors at the bottom
+        if (a.duration === 0) return 1;
+        if (b.duration === 0) return -1;
+        return a.duration - b.duration;
+      });
+      
+      sortedResults.forEach(result => {
         const model = this.models.find(m => m.name === result.model);
         const modelName = model?.displayName || result.model;
-        const paddedName = modelName.padEnd(maxModelLength + 2);
+        const paddedName = modelName.padEnd(maxModelLength);
+        
+        // Format timing
+        const timing = result.duration > 0 
+          ? `[${result.duration.toString().padStart(5)}ms]`
+          : '[  ERROR]';
         
         // Format response - take first line only for compact view
         const response = result.response.trim().split('\n')[0];
         
-        if (result.duration === 0 && result.response.startsWith('Error:')) {
-          console.log(`[${paddedName}]: ${response}`);
-        } else {
-          console.log(`[${paddedName}]: ${response}`);
-        }
-      });
-      
-      // Show timing summary
-      console.log('\n⏱️  Timings:');
-      results.forEach(result => {
-        if (result.duration > 0) {
-          const model = this.models.find(m => m.name === result.model);
-          const modelName = model?.displayName || result.model;
-          console.log(`   ${modelName}: ${result.duration}ms`);
-        }
+        console.log(`${timing} [${paddedName}]: ${response}`);
       });
     } else {
       // Verbose format for longer responses
