@@ -44,6 +44,20 @@ class InteractiveMultiModel {
     // Initialize the multi-model system
     await this.multiModel.initialize();
     
+    // Check for custom GGUF file from command line
+    const args = process.argv.slice(2);
+    if (args.length > 0 && args[0].endsWith('.gguf')) {
+      const customGgufPath = path.resolve(args[0]);
+      if (fs.existsSync(customGgufPath)) {
+        console.log(`\n🚀 Starting chat with custom model: ${customGgufPath}`);
+        await this.chatModeWithCustomModel(customGgufPath);
+        return;
+      } else {
+        console.log(`\n❌ Error: File not found: ${customGgufPath}`);
+        process.exit(1);
+      }
+    }
+    
     // Check available models
     const available = await this.multiModel.getAvailableModels();
     console.log('\n📦 Available models:', available.join(', '));
@@ -63,13 +77,15 @@ class InteractiveMultiModel {
     console.log('\n📋 MAIN MENU:');
     console.log('1. 💬 Chat mode (with context)');
     console.log('2. 📥 Download models');
-    console.log('3. 🚀 Parallel inference (all models)');
-    console.log('4. 📝 Sequential inference (streaming)');
-    console.log('5. 🎯 Single model inference');
-    console.log('6. 📊 Benchmark models');
-    console.log('7. Exit');
+    console.log('3. 📂 Chat with custom GGUF file');
+    console.log('4. Configure models');
+    console.log('5. 📊 Benchmark models');
+    console.log('6. 🎯 Run single model');
+    console.log('7. 🚀 Run parallel inference');
+    console.log('8. 📝 Run sequential inference (streaming)');
+    console.log('9. Exit');
 
-    const choice = await this.question('\nSelect option (1-7): ');
+    const choice = await this.question('\nSelect option (1-9): ');
 
     switch (choice) {
       case '1':
@@ -79,18 +95,24 @@ class InteractiveMultiModel {
         await this.downloadModels();
         break;
       case '3':
-        await this.runParallel();
+        await this.chatWithCustomGGUF();
         break;
       case '4':
-        await this.runSequential();
+        await this.configureModels();
         break;
       case '5':
-        await this.runSingle();
-        break;
-      case '6':
         await this.benchmark();
         break;
+      case '6':
+        await this.runSingle();
+        break;
       case '7':
+        await this.runParallel();
+        break;
+      case '8':
+        await this.runSequential();
+        break;
+      case '9':
         await this.multiModel.dispose();
         this.rl.close();
         return;
@@ -99,6 +121,13 @@ class InteractiveMultiModel {
     }
 
     await this.showMenu();
+  }
+
+  async configureModels() {
+    console.log('\n⚙️  CONFIGURE MODELS');
+    console.log('═'.repeat(50));
+    console.log('\nThis feature is not yet implemented.');
+    await this.question('\nPress Enter to continue...');
   }
 
   async downloadModels() {
@@ -571,6 +600,104 @@ class InteractiveMultiModel {
     await this.chatModeWithModel(selectedModel);
   }
 
+  async chatWithCustomGGUF() {
+    console.log('\n📂 CHAT WITH CUSTOM GGUF FILE');
+    console.log('═'.repeat(50));
+    
+    const ggufPath = await this.question('\nEnter path to GGUF file (or drag and drop): ');
+    
+    // Clean up the path (remove quotes if present)
+    const cleanPath = ggufPath.trim().replace(/^["']|["']$/g, '');
+    const resolvedPath = path.resolve(cleanPath);
+    
+    if (!fs.existsSync(resolvedPath)) {
+      console.log(`\n❌ Error: File not found: ${resolvedPath}`);
+      return;
+    }
+    
+    if (!resolvedPath.endsWith('.gguf')) {
+      console.log('\n❌ Error: File must be a GGUF file (*.gguf)');
+      return;
+    }
+    
+    await this.chatModeWithCustomModel(resolvedPath);
+  }
+
+  async chatModeWithCustomModel(ggufPath: string) {
+    console.log('\n💬 CHAT MODE - Custom Model');
+    console.log('═'.repeat(50));
+    
+    const filename = path.basename(ggufPath);
+    console.log(`\n📦 Model: ${filename}`);
+    console.log(`📂 Path: ${ggufPath}`);
+    
+    // Get file size
+    const stats = fs.statSync(ggufPath);
+    const sizeInGB = (stats.size / (1024 * 1024 * 1024)).toFixed(2);
+    console.log(`📏 Size: ${sizeInGB} GB`);
+    
+    console.log('\n💡 Commands: /clear (new conversation), /exit (return to menu)');
+    console.log('─'.repeat(50));
+
+    try {
+      // Initialize custom model chat session
+      await this.initializeCustomModelChatSession(ggufPath);
+
+      // Chat loop
+      while (true) {
+        const input = await this.question('\n👤 You: ');
+        
+        // Handle commands
+        if (input.startsWith('/')) {
+          const command = input.toLowerCase();
+          
+          if (command === '/exit') {
+            console.log('👋 Exiting chat mode...');
+            if (this.currentChatSession) {
+              await this.currentChatSession.context.dispose();
+              this.currentChatSession = undefined;
+            }
+            break;
+          } else if (command === '/clear') {
+            console.log('🔄 Starting new conversation...');
+            if (this.currentChatSession) {
+              // Get the sequence and clear its history
+              const sequence = this.currentChatSession.context.getSequence();
+              sequence.clearHistory();
+              
+              // Create a new chat session with cleared history
+              this.currentChatSession.session = new LlamaChatSession({
+                contextSequence: sequence,
+                systemPrompt: 'You are a helpful AI assistant. Provide clear, concise, and helpful responses.'
+              });
+            }
+            console.log('✅ Conversation cleared!');
+            continue;
+          } else {
+            console.log('❌ Unknown command. Available: /clear, /exit');
+            continue;
+          }
+        }
+
+        // Generate response
+        console.log('\n🤖 Assistant: ', '');
+        try {
+          await this.currentChatSession!.session.prompt(input, {
+            onTextChunk: (chunk) => {
+              process.stdout.write(chunk);
+            }
+          });
+          console.log(); // New line after response
+        } catch (error: any) {
+          console.log(`\n❌ Error: ${error.message}`);
+          console.log('💡 Try /clear to start a new conversation.');
+        }
+      }
+    } catch (error: any) {
+      console.error(`❌ Failed to load custom model: ${error.message}`);
+    }
+  }
+
   private async initializeChatSession(modelName: string) {
     try {
       // Get the model configuration
@@ -598,6 +725,33 @@ class InteractiveMultiModel {
       };
 
       console.log(`\n✅ Chat session initialized with ${modelName}`);
+    } catch (error: any) {
+      console.error(`❌ Failed to initialize chat: ${error.message}`);
+      throw error;
+    }
+  }
+
+  private async initializeCustomModelChatSession(modelPath: string) {
+    try {
+      // Load the custom model directly
+      const { model, context } = await this.multiModel.loadCustomModel(modelPath);
+      
+      // Create a new sequence for chat
+      const sequence = context.getSequence();
+      
+      // Create chat session with system prompt
+      const session = new LlamaChatSession({
+        contextSequence: sequence,
+        systemPrompt: 'You are a helpful AI assistant. Provide clear, concise, and helpful responses.'
+      });
+
+      this.currentChatSession = {
+        session,
+        context,
+        modelName: path.basename(modelPath)
+      };
+
+      console.log(`\n✅ Chat session initialized with custom model`);
     } catch (error: any) {
       console.error(`❌ Failed to initialize chat: ${error.message}`);
       throw error;

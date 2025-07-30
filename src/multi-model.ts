@@ -265,6 +265,35 @@ class MultiModelInference {
     return { model, context };
   }
 
+  // Load a custom model from a specific path
+  public async loadCustomModel(modelPath: string) {
+    if (!this.llama) throw new Error('Llama not initialized');
+    
+    if (!existsSync(modelPath)) {
+      throw new Error(`Model file not found: ${modelPath}`);
+    }
+
+    const modelName = `custom_${path.basename(modelPath)}`;
+    
+    // Check if already loaded
+    if (this.loadedModels.has(modelName)) {
+      return this.loadedModels.get(modelName)!;
+    }
+
+    console.log(`Loading custom model: ${path.basename(modelPath)}...`);
+    const model = await this.llama.loadModel({
+      modelPath,
+      gpuLayers: 0
+    });
+
+    const context = await model.createContext({
+      contextSize: 1024 // Smaller context for multi-model usage
+    });
+
+    this.loadedModels.set(modelName, { model, context });
+    return { model, context };
+  }
+
   // Run inference on a single model
   async inferSingle(
     modelName: string, 
