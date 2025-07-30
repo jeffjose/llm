@@ -1,0 +1,26 @@
+{
+  "name": "llm",
+  "version": "1.0.0",
+  "description": "Local LLM inference with llama.cpp - run language models directly without a server",
+  "main": "index.js",
+  "scripts": {
+    "start": "tsx src/interactive-multi-model.ts",
+    "download": "tsx src/download-models.ts",
+    "build": "tsc",
+    "dev": "tsx watch src/interactive-multi-model.ts"
+  },
+  "keywords": ["llm", "llama.cpp", "ai", "language-model", "inference", "local", "offline"],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jeffjose/llm.git"
+  },
+  "type": "commonjs",
+  "devDependencies": {
+    "@types/node": "^24.1.0",
+    "node-llama-cpp": "^3.10.0",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  }
+}
