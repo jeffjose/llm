@@ -15,6 +15,7 @@ The codebase consists of three main components:
 3. **download-models.ts**: Standalone model downloader with curated list of GGUF models from HuggingFace
 
 Key architectural decisions:
+
 - Uses node-llama-cpp for direct llama.cpp integration
 - Models are stored in `models/` directory as GGUF files
 - Supports both streaming and non-streaming inference
@@ -50,3 +51,4 @@ pnpm dev
 ## Best Practices
 
 - Always use pnpm
+- No need to build the app, the user will test it manually

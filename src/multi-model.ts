@@ -348,19 +348,54 @@ class MultiModelInference {
   }
 
   // Compare outputs side by side
-  displayComparison(results: InferenceResult[]) {
+  displayComparison(results: InferenceResult[], compact: boolean = false) {
     console.log('\n📊 Model Comparison:');
     console.log('═'.repeat(80));
-
-    for (const result of results) {
-      const model = this.models.find(m => m.name === result.model);
-      console.log(`\n🤖 ${model?.displayName || result.model}`);
-      console.log(`⏱️  Duration: ${result.duration}ms`);
-      if (result.tokensPerSecond) {
-        console.log(`⚡ Speed: ${result.tokensPerSecond} tokens/sec`);
+    
+    if (compact) {
+      // Compact format for short responses
+      const maxModelLength = Math.max(...results.map(r => {
+        const model = this.models.find(m => m.name === r.model);
+        return (model?.displayName || r.model).length;
+      }));
+      
+      console.log();
+      results.forEach(result => {
+        const model = this.models.find(m => m.name === result.model);
+        const modelName = model?.displayName || result.model;
+        const paddedName = modelName.padEnd(maxModelLength + 2);
+        
+        // Format response - take first line only for compact view
+        const response = result.response.trim().split('\n')[0];
+        
+        if (result.duration === 0 && result.response.startsWith('Error:')) {
+          console.log(`[${paddedName}]: ${response}`);
+        } else {
+          console.log(`[${paddedName}]: ${response}`);
+        }
+      });
+      
+      // Show timing summary
+      console.log('\n⏱️  Timings:');
+      results.forEach(result => {
+        if (result.duration > 0) {
+          const model = this.models.find(m => m.name === result.model);
+          const modelName = model?.displayName || result.model;
+          console.log(`   ${modelName}: ${result.duration}ms`);
+        }
+      });
+    } else {
+      // Verbose format for longer responses
+      for (const result of results) {
+        const model = this.models.find(m => m.name === result.model);
+        console.log(`\n🤖 ${model?.displayName || result.model}`);
+        console.log(`⏱️  Duration: ${result.duration}ms`);
+        if (result.tokensPerSecond) {
+          console.log(`⚡ Speed: ${result.tokensPerSecond} tokens/sec`);
+        }
+        console.log('─'.repeat(40));
+        console.log(result.response.trim());
       }
-      console.log('─'.repeat(40));
-      console.log(result.response.trim());
     }
     
     console.log('\n' + '═'.repeat(80));

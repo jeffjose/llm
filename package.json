@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Local LLM inference with llama.cpp - run language models directly without a server",
   "main": "index.js",
+  "bin": {
+    "llm": "./bin/llm.ts"
+  },
   "scripts": {
     "start": "tsx src/interactive-multi-model.ts",
     "download": "tsx src/download-models.ts",
@@ -17,10 +20,12 @@
     "url": "https://github.com/jeffjose/llm.git"
   },
   "type": "commonjs",
+  "dependencies": {
+    "tsx": "^4.20.3"
+  },
   "devDependencies": {
     "@types/node": "^24.1.0",
     "node-llama-cpp": "^3.10.0",
-    "tsx": "^4.20.3",
     "typescript": "^5.8.3"
   }
 }

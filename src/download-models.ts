@@ -6,15 +6,30 @@ import { spawn } from 'child_process';
 import https from 'https';
 import { pipeline } from 'stream/promises';
 
+// Helper function to parse size strings to bytes
+function parseSizeToBytes(sizeStr: string): number | undefined {
+  const match = sizeStr.match(/^([\d.]+)\s*(MB|GB)$/i);
+  if (!match) return undefined;
+  
+  const value = parseFloat(match[1]);
+  const unit = match[2].toUpperCase();
+  
+  if (unit === 'MB') return Math.floor(value * 1024 * 1024);
+  if (unit === 'GB') return Math.floor(value * 1024 * 1024 * 1024);
+  return undefined;
+}
+
 interface ModelInfo {
   name: string;
   displayName: string;
   filename: string;
   size: string;
   url: string;
+  fallbackUrl?: string;  // Alternative URL if primary fails
   description: string;
   architecture?: string;
   releaseDate?: string;
+  expectedSizeBytes?: number;
 }
 
 const MODELS: ModelInfo[] = [
@@ -44,10 +59,12 @@ const MODELS: ModelInfo[] = [
     displayName: 'Qwen2.5 0.5B',
     filename: 'Qwen2.5-0.5B-Instruct-Q4_K_M.gguf',
     size: '397MB',
-    url: 'https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf',
+    url: 'https://huggingface.co/bartowski/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/Qwen2.5-0.5B-Instruct-Q4_K_M.gguf',
+    fallbackUrl: 'https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf',
     description: 'Smallest, fastest model. Good for testing and basic tasks.',
     architecture: 'Qwen2.5 (Transformer)',
-    releaseDate: '2024'
+    releaseDate: '2024',
+    expectedSizeBytes: 416611552  // 397MB
   },
   
   // Small models (500MB - 1GB)
@@ -84,8 +101,10 @@ const MODELS: ModelInfo[] = [
     displayName: 'Phi-3 Mini 3.8B',
     filename: 'Phi-3-mini-4k-instruct-q4.gguf',
     size: '2.3GB',
-    url: 'https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf',
-    description: 'Microsoft\'s efficient model with strong reasoning.'
+    url: 'https://huggingface.co/bartowski/Phi-3.5-mini-instruct-GGUF/resolve/main/Phi-3.5-mini-instruct-Q4_K_M.gguf',
+    fallbackUrl: 'https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf',
+    description: 'Microsoft\'s efficient model with strong reasoning.',
+    expectedSizeBytes: 2469606195  // 2.3GB
   },
   
   // Medium models (1GB - 3GB)
@@ -103,7 +122,8 @@ const MODELS: ModelInfo[] = [
     filename: 'Llama-3.2-3B-Instruct-Q4_K_M.gguf',
     size: '2.0GB',
     url: 'https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf',
-    description: 'Balanced model with good quality and reasonable size.'
+    description: 'Balanced model with good quality and reasonable size.',
+    expectedSizeBytes: 2147483648  // 2.0GB
   },
   {
     name: 'gemma2:2b',
@@ -118,26 +138,30 @@ const MODELS: ModelInfo[] = [
     displayName: 'Qwen2.5 1.5B',
     filename: 'Qwen2.5-1.5B-Instruct-Q4_K_M.gguf',
     size: '1.0GB',
-    url: 'https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf',
-    description: 'Alibaba\'s multilingual model with good performance.'
+    url: 'https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf',
+    fallbackUrl: 'https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf',
+    description: 'Alibaba\'s multilingual model with good performance.',
+    expectedSizeBytes: 1073741824  // 1.0GB
   },
   
   // Large models (3GB+)
   {
     name: 'mistral:7b',
-    displayName: 'Mistral 7B v0.3',
+    displayName: 'Mistral 7B v0.2',
     filename: 'mistral-7b-instruct-v0.3.Q4_K_M.gguf',
-    size: '4.4GB',
-    url: 'https://huggingface.co/MistralAI/Mistral-7B-Instruct-v0.3-GGUF/resolve/main/mistral-7b-instruct-v0.3.Q4_K_M.gguf',
-    description: 'High-quality 7B model with excellent performance.'
+    size: '4.1GB',
+    url: 'https://huggingface.co/TheBloke/Mistral-7B-Instruct-v0.2-GGUF/resolve/main/mistral-7b-instruct-v0.2.Q4_K_M.gguf',
+    description: 'High-quality 7B model with excellent performance.',
+    expectedSizeBytes: 4368439584  // 4.1GB
   },
   {
     name: 'qwen2.5:7b',
     displayName: 'Qwen2.5 7B',
     filename: 'Qwen2.5-7B-Instruct-Q4_K_M.gguf',
     size: '4.7GB',
-    url: 'https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF/resolve/main/qwen2.5-7b-instruct-q4_k_m.gguf',
-    description: 'Large multilingual model with state-of-the-art performance.'
+    url: 'https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF/resolve/main/Qwen2.5-7B-Instruct-Q4_K_M.gguf',
+    description: 'Large multilingual model with state-of-the-art performance.',
+    expectedSizeBytes: 4683074240
   },
   {
     name: 'deepseek-r1:1.5b',
@@ -179,13 +203,68 @@ class ModelDownloader {
       console.log(`\n📁 Created models directory: ${this.modelsDir}`);
     }
     
+    // Check for incomplete downloads
+    await this.checkIncompleteDownloads();
+    
     await this.showMenu();
+  }
+
+  async checkIncompleteDownloads() {
+    const files = fs.readdirSync(this.modelsDir);
+    const incompleteFiles: string[] = [];
+    
+    // Check for .tmp files
+    files.forEach(file => {
+      if (file.endsWith('.tmp')) {
+        incompleteFiles.push(file);
+      }
+    });
+    
+    // Check for empty model files
+    MODELS.forEach(model => {
+      const filePath = path.join(this.modelsDir, model.filename);
+      if (fs.existsSync(filePath)) {
+        const stats = fs.statSync(filePath);
+        if (stats.size === 0) {
+          incompleteFiles.push(model.filename);
+        }
+      }
+    });
+    
+    if (incompleteFiles.length > 0) {
+      console.log('\n⚠️  Found incomplete downloads:');
+      incompleteFiles.forEach(file => {
+        console.log(`   - ${file}`);
+      });
+      
+      const cleanup = await this.question('\nClean up incomplete downloads? (y/n): ');
+      if (cleanup.toLowerCase() === 'y') {
+        incompleteFiles.forEach(file => {
+          const filePath = path.join(this.modelsDir, file);
+          if (fs.existsSync(filePath)) {
+            fs.unlinkSync(filePath);
+            console.log(`   🗑️  Deleted: ${file}`);
+          }
+        });
+        console.log('\n✅ Cleanup complete!');
+      }
+    }
   }
 
 
   displayModel(model: ModelInfo, index: number) {
-    const exists = fs.existsSync(path.join(this.modelsDir, model.filename));
-    const status = exists ? '✅' : '  ';
+    const filePath = path.join(this.modelsDir, model.filename);
+    const exists = fs.existsSync(filePath);
+    let status = exists ? '✅' : '  ';
+    
+    // Check if file size is correct for downloaded models
+    if (exists && model.expectedSizeBytes) {
+      const stats = fs.statSync(filePath);
+      if (stats.size === 0 || Math.abs(stats.size - model.expectedSizeBytes) > model.expectedSizeBytes * 0.1) {
+        status = '⚠️ '; // Warning emoji for incomplete downloads
+      }
+    }
+    
     console.log(`${status} ${index}. ${model.displayName} (${model.size}) - ${model.description}`);
   }
 
@@ -210,7 +289,7 @@ class ModelDownloader {
     const downloadChoice = await this.question('\nDownload now? (y/n): ');
     
     if (downloadChoice.toLowerCase() === 'y') {
-      const success = await this.downloadModel(model.url, filePath, model.displayName);
+      const success = await this.downloadModel(model.url, filePath, model.displayName, model.expectedSizeBytes, model.fallbackUrl);
       if (success) {
         await this.showPostDownloadOptions(model);
       }
@@ -218,43 +297,115 @@ class ModelDownloader {
       console.log('\n📥 Manual download commands:\n');
       console.log('Option 1 - Using wget:');
       console.log(`wget -O "${filePath}" "${model.url}"`);
+      if (model.fallbackUrl) {
+        console.log('\nAlternative URL (if primary fails):');
+        console.log(`wget -O "${filePath}" "${model.fallbackUrl}"`);
+      }
       console.log('\nOption 2 - Using curl:');
       console.log(`curl -L -o "${filePath}" "${model.url}"`);
       await this.question('\nPress Enter to continue...');
     }
   }
 
-  private async downloadModel(url: string, filePath: string, modelName: string): Promise<boolean> {
+  private async downloadModel(url: string, filePath: string, modelName: string, expectedSize?: number, fallbackUrl?: string): Promise<boolean> {
     console.log(`\n⏳ Downloading ${modelName}...`);
     console.log('This may take a few minutes depending on your connection speed.\n');
 
-    try {
-      // Try using system wget first (fastest)
-      const wgetAvailable = await this.checkCommand('wget');
-      if (wgetAvailable) {
-        await this.downloadWithWget(url, filePath);
-        console.log(`\n✅ Successfully downloaded ${modelName}!`);
-        return true;
-      }
+    const tempFilePath = `${filePath}.tmp`;
+    let attempts = 0;
+    const maxAttempts = 3;
 
-      // Try curl as fallback
-      const curlAvailable = await this.checkCommand('curl');
-      if (curlAvailable) {
-        await this.downloadWithCurl(url, filePath);
-        console.log(`\n✅ Successfully downloaded ${modelName}!`);
-        return true;
-      }
+    while (attempts < maxAttempts) {
+      try {
+        // Clean up any incomplete downloads
+        if (fs.existsSync(tempFilePath)) {
+          fs.unlinkSync(tempFilePath);
+        }
 
-      // Use Node.js HTTPS as last resort
-      console.log('Using built-in downloader (this may be slower)...');
-      await this.downloadWithNode(url, filePath);
-      console.log(`\n✅ Successfully downloaded ${modelName}!`);
-      return true;
-    } catch (error: any) {
-      console.error(`\n❌ Download failed: ${error.message}`);
-      console.log('Please try downloading manually with the commands provided.');
-      return false;
+        let downloadUrl = url;
+        let usingFallback = false;
+        
+        try {
+          // Try using system wget first (fastest)
+          const wgetAvailable = await this.checkCommand('wget');
+          if (wgetAvailable) {
+            await this.downloadWithWget(downloadUrl, tempFilePath);
+          } else {
+            // Try curl as fallback
+            const curlAvailable = await this.checkCommand('curl');
+            if (curlAvailable) {
+              await this.downloadWithCurl(downloadUrl, tempFilePath);
+            } else {
+              // Use Node.js HTTPS as last resort
+              console.log('Using built-in downloader (this may be slower)...');
+              await this.downloadWithNode(downloadUrl, tempFilePath);
+            }
+          }
+        } catch (downloadError: any) {
+          // Check if it's an authentication error
+          if ((downloadError.message.includes('401') || downloadError.message.includes('403')) && fallbackUrl && !usingFallback) {
+            console.log('\n⚠️  Primary URL requires authentication, trying alternative source...');
+            downloadUrl = fallbackUrl;
+            usingFallback = true;
+            
+            // Retry with fallback URL
+            const wgetAvailable = await this.checkCommand('wget');
+            if (wgetAvailable) {
+              await this.downloadWithWget(downloadUrl, tempFilePath);
+            } else {
+              const curlAvailable = await this.checkCommand('curl');
+              if (curlAvailable) {
+                await this.downloadWithCurl(downloadUrl, tempFilePath);
+              } else {
+                await this.downloadWithNode(downloadUrl, tempFilePath);
+              }
+            }
+          } else {
+            throw downloadError;
+          }
+        }
+
+        // Verify download
+        if (!fs.existsSync(tempFilePath)) {
+          throw new Error('Download file not found after completion');
+        }
+
+        const fileStats = fs.statSync(tempFilePath);
+        if (fileStats.size === 0) {
+          throw new Error('Downloaded file is empty');
+        }
+
+        if (expectedSize && Math.abs(fileStats.size - expectedSize) > expectedSize * 0.01) {
+          // Allow 1% tolerance for size differences
+          console.warn(`⚠️  File size differs from expected. Expected: ${(expectedSize / 1024 / 1024 / 1024).toFixed(2)} GB, Got: ${(fileStats.size / 1024 / 1024 / 1024).toFixed(2)} GB`);
+          console.log('This might be due to model updates. Proceeding anyway...');
+        }
+
+        // Move temp file to final location
+        fs.renameSync(tempFilePath, filePath);
+        console.log(`\n✅ Successfully downloaded ${modelName}!`);
+        console.log(`📏 File size: ${(fileStats.size / 1024 / 1024 / 1024).toFixed(2)} GB`);
+        return true;
+      } catch (error: any) {
+        attempts++;
+        console.error(`\n❌ Download attempt ${attempts} failed: ${error.message}`);
+        
+        // Clean up failed download
+        if (fs.existsSync(tempFilePath)) {
+          fs.unlinkSync(tempFilePath);
+        }
+
+        if (attempts < maxAttempts) {
+          console.log(`\n🔄 Retrying download (attempt ${attempts + 1}/${maxAttempts})...`);
+          await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds before retry
+        } else {
+          console.log('\n❌ Download failed after all attempts.');
+          console.log('Please try downloading manually with the commands provided.');
+          return false;
+        }
+      }
     }
+    return false;
   }
 
   private checkCommand(command: string): Promise<boolean> {
@@ -269,14 +420,24 @@ class ModelDownloader {
     return new Promise((resolve, reject) => {
       const wget = spawn('wget', [
         '--show-progress',
+        '--continue',  // Resume partial downloads
+        '--retry-connrefused',  // Retry on connection refused
+        '--tries=3',  // Number of retries
         '-O', filePath,
         url
       ], { stdio: 'inherit' });
 
       wget.on('error', reject);
       wget.on('exit', (code) => {
-        if (code === 0) resolve();
-        else reject(new Error(`wget exited with code ${code}`));
+        if (code === 0) {
+          resolve();
+        } else if (code === 6) {
+          reject(new Error('401 Unauthorized - Authentication required'));
+        } else if (code === 8) {
+          reject(new Error('404 Not Found - File not available'));
+        } else {
+          reject(new Error(`wget exited with code ${code}`));
+        }
       });
     });
   }
@@ -284,16 +445,26 @@ class ModelDownloader {
   private downloadWithCurl(url: string, filePath: string): Promise<void> {
     return new Promise((resolve, reject) => {
       const curl = spawn('curl', [
-        '-L',
+        '-L',  // Follow redirects
         '--progress-bar',
+        '--retry', '3',  // Retry 3 times
+        '--retry-delay', '2',  // Wait 2 seconds between retries
+        '--retry-max-time', '120',  // Max time for retries
+        '--fail',  // Fail on HTTP errors
+        '-C', '-',  // Continue partial downloads
         '-o', filePath,
         url
       ], { stdio: 'inherit' });
 
       curl.on('error', reject);
       curl.on('exit', (code) => {
-        if (code === 0) resolve();
-        else reject(new Error(`curl exited with code ${code}`));
+        if (code === 0) {
+          resolve();
+        } else if (code === 22) {
+          reject(new Error('401 Unauthorized - Authentication required'));
+        } else {
+          reject(new Error(`curl exited with code ${code}`));
+        }
       });
     });
   }
@@ -316,7 +487,11 @@ class ModelDownloader {
         }
 
         if (response.statusCode !== 200) {
-          reject(new Error(`HTTP ${response.statusCode}`));
+          if (response.statusCode === 401 || response.statusCode === 403) {
+            reject(new Error(`${response.statusCode} - Authentication required`));
+          } else {
+            reject(new Error(`HTTP ${response.statusCode}`));
+          }
           return;
         }
 

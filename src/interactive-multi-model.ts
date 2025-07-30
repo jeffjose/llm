@@ -21,6 +21,22 @@ class InteractiveMultiModel {
     });
   }
 
+  private parseSizeToBytes(sizeStr: string): number {
+    const match = sizeStr.match(/^([\d.]+)\s*(MB|GB)$/i);
+    if (!match) return 0;
+    
+    const value = parseFloat(match[1]);
+    const unit = match[2].toUpperCase();
+    
+    if (unit === 'MB') return Math.floor(value * 1024 * 1024);
+    if (unit === 'GB') return Math.floor(value * 1024 * 1024 * 1024);
+    return 0;
+  }
+
+  private displayCompactModel(config: any, index: number) {
+    console.log(`${index}. ${config.displayName} (${config.size}) - ${config.bestFor}`);
+  }
+
   async start() {
     console.log('🤖 Multi-Model LLM Inference Tool');
     console.log('═'.repeat(50));
@@ -47,14 +63,13 @@ class InteractiveMultiModel {
     console.log('\n📋 MAIN MENU:');
     console.log('1. 💬 Chat mode (with context)');
     console.log('2. 📥 Download models');
-    console.log('3. Configure models');
-    console.log('4. Benchmark models');
-    console.log('5. Run single model');
-    console.log('6. Run parallel inference');
-    console.log('7. Run sequential inference (streaming)');
-    console.log('8. Exit');
+    console.log('3. 🚀 Parallel inference (all models)');
+    console.log('4. 📝 Sequential inference (streaming)');
+    console.log('5. 🎯 Single model inference');
+    console.log('6. 📊 Benchmark models');
+    console.log('7. Exit');
 
-    const choice = await this.question('\nSelect option (1-8): ');
+    const choice = await this.question('\nSelect option (1-7): ');
 
     switch (choice) {
       case '1':
@@ -64,21 +79,18 @@ class InteractiveMultiModel {
         await this.downloadModels();
         break;
       case '3':
-        await this.configureModels();
+        await this.runParallel();
         break;
       case '4':
-        await this.benchmark();
+        await this.runSequential();
         break;
       case '5':
         await this.runSingle();
         break;
       case '6':
-        await this.runParallel();
+        await this.benchmark();
         break;
       case '7':
-        await this.runSequential();
-        break;
-      case '8':
         await this.multiModel.dispose();
         this.rl.close();
         return;
@@ -253,45 +265,67 @@ class InteractiveMultiModel {
     await this.downloadModels();
   }
 
-  async configureModels() {
-    const models = [
-      'qwen2.5:0.5b',
-      'smollm:135m',
-      'smollm:360m',
-      'tinyllama',
-      'stablelm:1.6b',
-      'openhermes:0.77b',
-      'phi3:mini',
-      'llama3.2:1b',
-      'llama3.2:3b',
-      'gemma2:2b',
-      'qwen2.5:1.5b',
-      'qwen3:4b',
-      'mistral:7b',
-      'qwen2.5:7b',
-      'deepseek-r1:1.5b'
-    ];
-
-    console.log('\n🔧 Configure Models:');
-    for (const model of models) {
-      const enable = await this.question(`Enable ${model}? (y/n): `);
-      this.multiModel.setModelEnabled(model, enable.toLowerCase() === 'y');
-    }
-
-    this.multiModel.listModels();
-  }
 
   async runParallel() {
+    // Get available models
+    const available = await this.multiModel.getAvailableModels();
+    if (available.length === 0) {
+      console.log('❌ No models available. Please download models first.');
+      return;
+    }
+    
+    console.log('\n📦 Available models for parallel inference:');
+    available.forEach((model, index) => {
+      console.log(`${index + 1}. ${model}`);
+    });
+    
+    // Enable all available models for parallel inference
+    available.forEach(modelName => {
+      this.multiModel.setModelEnabled(modelName, true);
+    });
+    
     const prompt = await this.question('\nEnter prompt: ');
-    console.log('\n🚀 Running parallel inference...\n');
+    console.log('\n🚀 Running parallel inference on all available models...\n');
     
     const results = await this.multiModel.inferParallel(prompt);
-    this.multiModel.displayComparison(results);
+    
+    // Use compact format if all responses are short (less than 100 chars)
+    const allShort = results.every(r => r.response.trim().length < 100);
+    this.multiModel.displayComparison(results, allShort);
+    
+    // Reset to default enabled state
+    this.multiModel.models.forEach(model => {
+      model.enabled = model.name === 'qwen2.5:0.5b';
+    });
   }
 
   async runSequential() {
+    // Get available models
+    const available = await this.multiModel.getAvailableModels();
+    if (available.length === 0) {
+      console.log('❌ No models available. Please download models first.');
+      return;
+    }
+    
+    console.log('\n📦 Available models for sequential inference:');
+    available.forEach((model, index) => {
+      console.log(`${index + 1}. ${model}`);
+    });
+    
+    // Enable all available models for sequential inference
+    available.forEach(modelName => {
+      this.multiModel.setModelEnabled(modelName, true);
+    });
+    
     const prompt = await this.question('\nEnter prompt: ');
+    console.log('\n🚀 Running sequential inference on all available models...\n');
+    
     await this.multiModel.inferSequential(prompt);
+    
+    // Reset to default enabled state
+    this.multiModel.models.forEach(model => {
+      model.enabled = model.name === 'qwen2.5:0.5b';
+    });
   }
 
   async runSingle() {
@@ -417,29 +451,77 @@ class InteractiveMultiModel {
       return;
     }
 
-    console.log('\n📦 Available models for chat:');
-    console.log('─'.repeat(80));
+    // Get model configs and sort by size
+    const modelConfigs = available
+      .map(modelName => this.multiModel.getModelConfig(modelName))
+      .filter(config => config !== undefined) as any[];
     
-    available.forEach((modelName, index) => {
-      const modelConfig = this.multiModel.getModelConfig(modelName);
-      if (modelConfig) {
-        console.log(`\n${index + 1}. ${modelConfig.displayName} (${modelConfig.size})`);
-        console.log(`   📅 Released: ${modelConfig.releaseDate} | 🏗️ ${modelConfig.architecture}`);
-        console.log(`   💡 Capabilities: ${modelConfig.capabilities}`);
-        console.log(`   ✨ Best for: ${modelConfig.bestFor}`);
-      }
+    // Sort by size (convert to bytes for proper sorting)
+    modelConfigs.sort((a, b) => {
+      const sizeA = this.parseSizeToBytes(a.size);
+      const sizeB = this.parseSizeToBytes(b.size);
+      return sizeA - sizeB;
     });
-    console.log('─'.repeat(80));
+    
+    console.log('\n📦 Available models for chat:');
+    
+    let displayIndex = 1;
+    
+    // Group by size categories
+    const tinyModels = modelConfigs.filter(config => 
+      config.size.includes('MB') && parseInt(config.size) < 500
+    );
+    if (tinyModels.length > 0) {
+      console.log('\n🔸 Tiny Models (< 500MB):');
+      tinyModels.forEach(config => {
+        this.displayCompactModel(config, displayIndex++);
+      });
+    }
+    
+    const smallModels = modelConfigs.filter(config => {
+      const size = parseInt(config.size);
+      return config.size.includes('MB') && size >= 500;
+    });
+    if (smallModels.length > 0) {
+      console.log('\n🔹 Small Models (500MB - 1GB):');
+      smallModels.forEach(config => {
+        this.displayCompactModel(config, displayIndex++);
+      });
+    }
+    
+    const mediumModels = modelConfigs.filter(config => {
+      const size = parseFloat(config.size);
+      return config.size.includes('GB') && size >= 1 && size < 3;
+    });
+    if (mediumModels.length > 0) {
+      console.log('\n🔷 Medium Models (1GB - 3GB):');
+      mediumModels.forEach(config => {
+        this.displayCompactModel(config, displayIndex++);
+      });
+    }
+    
+    const largeModels = modelConfigs.filter(config => {
+      const size = parseFloat(config.size);
+      return config.size.includes('GB') && size >= 3;
+    });
+    if (largeModels.length > 0) {
+      console.log('\n🔶 Large Models (3GB+):');
+      largeModels.forEach(config => {
+        this.displayCompactModel(config, displayIndex++);
+      });
+    }
+    
+    console.log();
 
     const modelChoice = await this.question('\nSelect model number: ');
     const modelIndex = parseInt(modelChoice) - 1;
     
-    if (modelIndex < 0 || modelIndex >= available.length) {
+    if (modelIndex < 0 || modelIndex >= modelConfigs.length) {
       console.log('❌ Invalid selection');
       return;
     }
 
-    const selectedModel = available[modelIndex];
+    const selectedModel = modelConfigs[modelIndex].name;
     await this.chatModeWithModel(selectedModel);
   }
 
